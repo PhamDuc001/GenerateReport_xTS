@@ -1,6 +1,7 @@
 import argparse
 import json
 import os
+import re
 import zipfile
 import shutil
 import subprocess
@@ -18,6 +19,34 @@ def log_fail(*args, **kwargs):
     print(*args, **kwargs)
     failed_logs.append(msg)
 
+def is_valid_result_name(name):
+    return bool(re.match(r"^\d{4}\.\d{2}\.\d{2}_\d{2}\.\d{2}\.\d{2}", name))
+
+def clean_invalid_results_items(results_dir):
+    """
+    Xoa cac folder/symlink khong hop le trong results/ (nhu 'lastest', 'latest'...).
+    Trong results/ chi cho phep ten folder co dinh dang YYYY.MM.DD_HH.MM.SS.
+    """
+    if not os.path.exists(results_dir) or not os.path.isdir(results_dir):
+        return
+
+    for item in os.listdir(results_dir):
+        if item.startswith("."):
+            continue
+        item_path = os.path.join(results_dir, item)
+        # Neu la folder hoac symlink khong dung dinh dang YYYY.MM.DD_HH.MM.SS
+        if os.path.isdir(item_path) or os.path.islink(item_path):
+            if not is_valid_result_name(item):
+                try:
+                    if os.path.islink(item_path):
+                        os.unlink(item_path)
+                        print(f"Removed invalid symlink: {item_path}")
+                    else:
+                        shutil.rmtree(item_path)
+                        print(f"Removed invalid folder: {item_path}")
+                except Exception as e:
+                    log_fail(f"Loi khi xoa folder khong hop le '{item}' trong {results_dir}: {e}")
+
 def check_folder_zip_pairs(target_dir, context_label=""):
     if not os.path.exists(target_dir) or not os.path.isdir(target_dir):
         return
@@ -26,6 +55,10 @@ def check_folder_zip_pairs(target_dir, context_label=""):
     if target_dir_norm in checked_dirs:
         return
     checked_dirs.add(target_dir_norm)
+
+    # Neu la thu muc results/, lam sach cac folder khong hop le (nhu 'lastest') truoc
+    if "results" in context_label.lower():
+        clean_invalid_results_items(target_dir)
 
     items = [it for it in os.listdir(target_dir) if not it.startswith(".")]
 
@@ -219,15 +252,24 @@ class lastTestResult():
     def get_datetime_folder_name(self, fol_name):
         self.fol_name = fol_name
         try:
-            main_part = self.fol_name.split("_")[0] + "_" + ".".join(self.fol_name.split("_")[1].split(".")[:3])
-            self.datetime_oj = datetime.strptime(main_part, "%Y.%m.%d_%H.%M.%S")
+            parts = self.fol_name.split("_")
+            if len(parts) >= 2:
+                main_part = parts[0] + "_" + ".".join(parts[1].split(".")[:3])
+                self.datetime_oj = datetime.strptime(main_part, "%Y.%m.%d_%H.%M.%S")
+            else:
+                self.datetime_oj = datetime.min
         except Exception as e:
             log_fail("Datetime parse error:", e)
+            self.datetime_oj = datetime.min
         return self.datetime_oj
             
     def sortFolder(self, path):
         self.masterPath = path
-        self.folder_unsort = [folder for folder in os.listdir(path) if os.path.isdir(os.path.join(path, folder))]
+        clean_invalid_results_items(path)
+        self.folder_unsort = [
+            folder for folder in os.listdir(path)
+            if os.path.isdir(os.path.join(path, folder)) and is_valid_result_name(folder)
+        ]
         self.sorted_fol = sorted(self.folder_unsort, key=self.get_datetime_folder_name)
         return self.sorted_fol
 
