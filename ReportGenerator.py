@@ -11,11 +11,49 @@ import xml.etree.ElementTree as ET
 from turtle import *
 
 failed_logs = []
+checked_dirs = set()
 
 def log_fail(*args, **kwargs):
     msg = " ".join(str(arg) for arg in args)
     print(*args, **kwargs)
     failed_logs.append(msg)
+
+def check_folder_zip_pairs(target_dir, context_label=""):
+    if not os.path.exists(target_dir) or not os.path.isdir(target_dir):
+        return
+
+    target_dir_norm = os.path.normpath(os.path.abspath(target_dir))
+    if target_dir_norm in checked_dirs:
+        return
+    checked_dirs.add(target_dir_norm)
+
+    items = [it for it in os.listdir(target_dir) if not it.startswith(".")]
+
+    subfolders = set()
+    zip_stems = {}
+
+    for item in items:
+        item_path = os.path.join(target_dir, item)
+        if os.path.isdir(item_path):
+            subfolders.add(item)
+        elif os.path.isfile(item_path) and item.lower().endswith(".zip"):
+            stem = item[:-4]
+            zip_stems[stem] = item
+
+    if not subfolders and not zip_stems:
+        log_fail(f"[{context_label}] Thu muc rong (khong co folder ket qua va file zip): {target_dir}")
+        return
+
+    # Kiem tra folder thieu file zip tuong ung
+    missing_zip = sorted(subfolders - set(zip_stems.keys()))
+    for fol in missing_zip:
+        log_fail(f"[{context_label}] Folder '{fol}' thieu file zip tuong ung: '{fol}.zip'")
+
+    # Kiem tra file zip thieu folder tuong ung
+    missing_folder = sorted(set(zip_stems.keys()) - subfolders)
+    for stem in missing_folder:
+        actual_zip = zip_stems[stem]
+        log_fail(f"[{context_label}] File zip '{actual_zip}' thieu folder tuong ung: '{stem}'")
 
 def run_command(command):
     process = subprocess.Popen(command, shell=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
@@ -94,22 +132,28 @@ class GenerDict():
         for fol in os.listdir(self.path):
             tempPath = os.path.join(self.path, fol)
             if not os.path.isfile(tempPath):
+                if "CTS_Verifier" in str(fol):
+                    self.strc[str(fol)] = {}
+                    check_folder_zip_pairs(tempPath, "CTS_Verifier")
+                    continue
                 self.strc[str(fol)] = {}
                 # For in XTS folder
                 for child in os.listdir(tempPath):
                     if str(child) == "results" and os.path.isdir(os.path.join(tempPath, child)):
+                        results_path = os.path.join(tempPath, child)
+                        check_folder_zip_pairs(results_path, f"{fol}/results")
                         self.strc[str(fol)]["Multiple"] = {}
                         lastTestMulti = lastTestResult()
-                        lastest = lastTestMulti.getLastTestFolder(os.path.join(tempPath, child))
+                        lastest = lastTestMulti.getLastTestFolder(results_path)
                         if lastest != "0":
                             self.strc[str(fol)]["Multiple"]['xml'] = str(
-                                os.path.join(tempPath, child) + "/" + lastest + "/test_result.xml")
+                                results_path + "/" + lastest + "/test_result.xml")
                             self.strc[str(fol)]["Multiple"]['html'] = str(
-                                os.path.join(tempPath, child) + "/" + lastest + "/test_result.html")
+                                results_path + "/" + lastest + "/test_result.html")
                             self.strc[str(fol)]["Multiple"]['zip'] = str(
-                                os.path.join(tempPath, child) + "/" + lastest + ".zip")
+                                results_path + "/" + lastest + ".zip")
                             self.strc[str(fol)]["Multiple"]['folder'] = str(
-                                os.path.join(tempPath, child) + "/" + lastest)
+                                results_path + "/" + lastest)
                             self.strc[str(fol)]["Multiple"]['name'] = str(lastest)
                     elif str(child) == "single" and os.path.isdir(os.path.join(tempPath, child)):
                         temp1 = os.path.join(tempPath, child)
@@ -122,17 +166,19 @@ class GenerDict():
                                 # For in Result of single Module XTS folder
                                 for child2 in os.listdir(temp2):
                                     if str(child2) == "results" and os.path.isdir(os.path.join(temp2, child2)):
+                                        single_results = os.path.join(temp2, child2)
+                                        check_folder_zip_pairs(single_results, f"{fol}/single/{sg}/results")
                                         lastTest = lastTestResult()
-                                        lastTestFol = lastTest.getLastTestFolder(os.path.join(temp2, child2))
+                                        lastTestFol = lastTest.getLastTestFolder(single_results)
                                         if lastTestFol != "0":
                                             self.strc[str(fol)][str(sg)]['xml'] = str(
-                                                os.path.join(temp2, child2) + "/" + lastTestFol + "/test_result.xml")
+                                                single_results + "/" + lastTestFol + "/test_result.xml")
                                             self.strc[str(fol)][str(sg)]['html'] = str(
-                                                os.path.join(temp2, child2) + "/" + lastTestFol + "/test_result.html")
+                                                single_results + "/" + lastTestFol + "/test_result.html")
                                             self.strc[str(fol)][str(sg)]['zip'] = str(
-                                                os.path.join(temp2, child2) + "/" + lastTestFol + ".zip")
+                                                single_results + "/" + lastTestFol + ".zip")
                                             self.strc[str(fol)][str(sg)]['folder'] = str(
-                                                os.path.join(temp2, child2) + "/" + lastTestFol)
+                                                single_results + "/" + lastTestFol)
                                             self.strc[str(fol)][str(sg)]['name'] = str(lastTestFol)
                     # shutil.make_archive(base_name=path+"/01."+fol, format='zip', root_dir=path,base_dir=fol)
             elif os.path.isfile(tempPath) and str(tempPath).__contains__("Verifier"):
@@ -149,12 +195,7 @@ class GenerDict():
                             self.strc["CTS_Verifier"]={}
                             self.strc["CTS_Verifier"]["ctsver_result_fol"] = cts_ver_fol
                             unzip_file(temp_dir, cts_ver_fol)
-                        elif str(temp_dir).__contains__("ats") or str(temp_dir).__contains__("ATS"):
-                            MakeNewFolder(self.path, "ATS_Verifier")
-                            ats_ver_fol = str(os.path.join(self.path, "ATS_Verifier"))
-                            self.strc["ATS_Verifier"] = {}
-                            self.strc["ATS_Verifier"]["atsver_result_fol"] = ats_ver_fol
-                            unzip_file(temp_dir, ats_ver_fol)
+                            check_folder_zip_pairs(cts_ver_fol, "CTS_Verifier")
                     elif os.path.isdir(temp_dir):
                         if str(temp_dir).__contains__("ctsve"):
                             MakeNewFolder(self.path, "CTS_Verifier")
@@ -162,12 +203,7 @@ class GenerDict():
                             run_command("cp -r "+temp_dir+"/* "+cts_ver_fol)
                             self.strc["CTS_Verifier"] = {}
                             self.strc["CTS_Verifier"]["ctsver_result_fol"]=cts_ver_fol
-                        elif str(temp_dir).__contains__("atsve"):
-                            MakeNewFolder(self.path, "ATS_Verifier")
-                            self.strc["ATS_Verifier"] = {}
-                            ats_ver_fol = str(os.path.join(self.path, "ATS_Verifier"))
-                            run_command("cp -r "+temp_dir+"/* "+ats_ver_fol)
-                            self.strc["ATS_Verifier"]["atsver_result_fol"] = ats_ver_fol
+                            check_folder_zip_pairs(cts_ver_fol, "CTS_Verifier")
                 shutil.rmtree(template)
         return self.strc
 
@@ -299,6 +335,7 @@ def MakeOemApfe(path, struct):
     try:
         src_cts = os.path.join(agruments(), "CTS_Verifier")
         if os.path.exists(src_cts):
+            check_folder_zip_pairs(src_cts, "CTS_Verifier")
             CopyFolder(src_cts, InternalPATH, "CTS_Verifier")
             print("Copied CTS_Verifier Ok")
     except Exception as e:
