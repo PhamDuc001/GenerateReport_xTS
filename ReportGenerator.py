@@ -35,7 +35,8 @@ def log_fail(*args, **kwargs):
         else:
             formatted_msg = f"{msg} {FAIL_TAG}"
     print(formatted_msg, **kwargs)
-    failed_logs.append(formatted_msg)
+    if formatted_msg not in failed_logs:
+        failed_logs.append(formatted_msg)
 
 def is_valid_result_name(name):
     return bool(re.match(r"^\d{4}\.\d{2}\.\d{2}_\d{2}\.\d{2}\.\d{2}", name))
@@ -492,14 +493,18 @@ def MakeOemApfe(path, struct):
                     MakeNewFolder(InternalPATH, i)
                     InternalStr[i]['Multiple'] = InternalPATH + "/" + i + "/" + "00." + i
                     MakeNewFolder(InternalPATH + "/" + i, "00." + i)
-                    CopyFolder(dict[i][j]['folder'], InternalStr[i]['Multiple'], dict[i][j]['name'])
-                    CopyFile(dict[i][j]['zip'], InternalStr[i]['Multiple'])
+                    if 'folder' in dict[i][j] and os.path.exists(dict[i][j]['folder']):
+                        CopyFolder(dict[i][j]['folder'], InternalStr[i]['Multiple'], dict[i][j]['name'])
+                    if 'zip' in dict[i][j] and os.path.exists(dict[i][j]['zip']):
+                        CopyFile(dict[i][j]['zip'], InternalStr[i]['Multiple'])
                 else:
                     MakeNewFolder(InternalPATH, i)
                     InternalStr[i][j] = InternalPATH + "/" + i + "/" + j
                     MakeNewFolder(InternalPATH + "/" + i, j)
-                    CopyFolder(dict[i][j]['folder'], InternalStr[i][j], dict[i][j]['name'])
-                    CopyFile(dict[i][j]['zip'], InternalStr[i][j])
+                    if 'folder' in dict[i][j] and os.path.exists(dict[i][j]['folder']):
+                        CopyFolder(dict[i][j]['folder'], InternalStr[i][j], dict[i][j]['name'])
+                    if 'zip' in dict[i][j] and os.path.exists(dict[i][j]['zip']):
+                        CopyFile(dict[i][j]['zip'], InternalStr[i][j])
             except KeyError as e:
                 log_fail(f"KeyError in MakeOemApfe ({i}/{j}):", e)
         print("Finish creating " + i + " folder")    
@@ -527,11 +532,13 @@ def MakeOemApfeUpload(path, struct):
                 if j == "Multiple":
                     MakeNewFolder(InternalPATH, i)
                     InternalStr[i]['Multiple'] = InternalPATH + "/" + i              
-                    CopyFile(dict[i][j]['zip'], InternalStr[i]['Multiple'] + "/" + dict[i][j]['zip'].split("/")[-1])
+                    if 'zip' in dict[i][j] and os.path.exists(dict[i][j]['zip']):
+                        CopyFile(dict[i][j]['zip'], InternalStr[i]['Multiple'] + "/" + dict[i][j]['zip'].split("/")[-1])
                 else:
                     MakeNewFolder(InternalPATH, i)
                     InternalStr[i][j] = InternalPATH + "/" + i 
-                    CopyFile(dict[i][j]['zip'], InternalStr[i][j] + "/" + dict[i][j]['zip'].split("/")[-1])
+                    if 'zip' in dict[i][j] and os.path.exists(dict[i][j]['zip']):
+                        CopyFile(dict[i][j]['zip'], InternalStr[i][j] + "/" + dict[i][j]['zip'].split("/")[-1])
             except KeyError as e:
                 log_fail(f"KeyError in MakeOemApfeUpload ({i}/{j}):", e)
         
