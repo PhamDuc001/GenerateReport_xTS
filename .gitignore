@@ -1,0 +1,13 @@
+# Logs
+*.log
+
+# Byte-compiled / optimized / DLL files
+__pycache__/
+*.py[cod]
+*$py.class
+
+# Environment / Editor files
+.vscode/
+.idea/
+.DS_Store
+Thumbs.db
