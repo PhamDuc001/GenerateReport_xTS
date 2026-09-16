@@ -131,13 +131,63 @@ def check_folder_zip_pairs(target_dir, context_label=""):
     # Check for folders missing matching zip file
     missing_zip = sorted(subfolders - set(zip_stems.keys()))
     for fol in missing_zip:
-        log_fail(f"[{context_label}] Folder '{fol}' is missing corresponding zip file: '{fol}.zip'")
+        log_fail(f"[{context_label}] Folder '{fol}' is missing zip file: '{fol}.zip'")
 
     # Check for zip files missing matching folder
     missing_folder = sorted(set(zip_stems.keys()) - subfolders)
     for stem in missing_folder:
         actual_zip = zip_stems[stem]
-        log_fail(f"[{context_label}] Zip file '{actual_zip}' is missing corresponding folder: '{stem}'")
+        log_fail(f"[{context_label}] Zip file '{actual_zip}' is missing folder: '{stem}'")
+
+checked_results_logs_pairs = set()
+
+def check_results_logs_matching(results_dir, logs_dir, context_label=""):
+    """
+    Check that session folders in results/ and logs/ match 1-to-1:
+    - Every valid test session folder in results/ must exist in logs/.
+    - Every valid test session folder in logs/ must exist in results/.
+    """
+    if not os.path.exists(results_dir) or not os.path.isdir(results_dir):
+        return
+
+    pair_key = (os.path.normpath(os.path.abspath(results_dir)), os.path.normpath(os.path.abspath(logs_dir)))
+    if pair_key in checked_results_logs_pairs:
+        return
+    checked_results_logs_pairs.add(pair_key)
+
+    # Clean both directories first so invalid items (e.g. 'lastest') are removed
+    clean_invalid_results_items(results_dir)
+    check_and_clean_logs_folder(logs_dir, f"{context_label}/logs")
+
+    if not os.path.exists(logs_dir) or not os.path.isdir(logs_dir):
+        log_fail(f"[{context_label}] Missing corresponding logs directory: {logs_dir}")
+        return
+
+    # Get valid test session folders in results/
+    result_folders = {
+        item for item in os.listdir(results_dir)
+        if not item.startswith(".")
+        and os.path.isdir(os.path.join(results_dir, item))
+        and is_valid_result_name(item)
+    }
+
+    # Get valid test session folders in logs/
+    log_folders = {
+        item for item in os.listdir(logs_dir)
+        if not item.startswith(".")
+        and os.path.isdir(os.path.join(logs_dir, item))
+        and is_valid_result_name(item)
+    }
+
+    # 1. Folders in results/ missing in logs/
+    missing_in_logs = sorted(result_folders - log_folders)
+    for fol in missing_in_logs:
+        log_fail(f"[{context_label}] Session folder '{fol}' in results/ is missing in logs/")
+
+    # 2. Folders in logs/ missing in results/
+    missing_in_results = sorted(log_folders - result_folders)
+    for fol in missing_in_results:
+        log_fail(f"[{context_label}] Session folder '{fol}' in logs/ is missing in results/")
 
 def run_command(command):
     process = subprocess.Popen(command, shell=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
@@ -225,7 +275,9 @@ class GenerDict():
                 for child in os.listdir(tempPath):
                     if str(child) == "results" and os.path.isdir(os.path.join(tempPath, child)):
                         results_path = os.path.join(tempPath, child)
+                        logs_path = os.path.join(tempPath, "logs")
                         check_folder_zip_pairs(results_path, f"{fol}/results")
+                        check_results_logs_matching(results_path, logs_path, str(fol))
                         self.strc[str(fol)]["Multiple"] = {}
                         lastTestMulti = lastTestResult()
                         lastest = lastTestMulti.getLastTestFolder(results_path)
@@ -254,7 +306,9 @@ class GenerDict():
                                 for child2 in os.listdir(temp2):
                                     if str(child2) == "results" and os.path.isdir(os.path.join(temp2, child2)):
                                         single_results = os.path.join(temp2, child2)
+                                        single_logs = os.path.join(temp2, "logs")
                                         check_folder_zip_pairs(single_results, f"{fol}/single/{sg}/results")
+                                        check_results_logs_matching(single_results, single_logs, f"{fol}/single/{sg}")
                                         lastTest = lastTestResult()
                                         lastTestFol = lastTest.getLastTestFolder(single_results)
                                         if lastTestFol != "0":
