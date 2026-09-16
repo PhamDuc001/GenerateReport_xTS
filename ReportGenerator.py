@@ -47,6 +47,57 @@ def clean_invalid_results_items(results_dir):
                 except Exception as e:
                     log_fail(f"Loi khi xoa folder khong hop le '{item}' trong {results_dir}: {e}")
 
+checked_logs_dirs = set()
+
+def check_and_clean_logs_folder(logs_dir, context_label=""):
+    """
+    Kiem tra va don dep thu muc logs/:
+    - Xoa bo moi folder/symlink khong hop le (nhu 'lastest', 'latest'...).
+    - Dam bao trong logs/ chi co cac folder co dinh dang YYYY.MM.DD_HH.MM.SS.
+    """
+    if not os.path.exists(logs_dir) or not os.path.isdir(logs_dir):
+        return
+
+    logs_dir_norm = os.path.normpath(os.path.abspath(logs_dir))
+    if logs_dir_norm in checked_logs_dirs:
+        return
+    checked_logs_dirs.add(logs_dir_norm)
+
+    for item in os.listdir(logs_dir):
+        if item.startswith("."):
+            continue
+        item_path = os.path.join(logs_dir, item)
+        if os.path.isdir(item_path) or os.path.islink(item_path):
+            if not is_valid_result_name(item):
+                try:
+                    if os.path.islink(item_path):
+                        os.unlink(item_path)
+                        print(f"Removed invalid symlink in logs: {item_path}")
+                    else:
+                        shutil.rmtree(item_path)
+                        print(f"Removed invalid folder in logs: {item_path}")
+                except Exception as e:
+                    log_fail(f"[{context_label}] Loi khi xoa folder khong hop le '{item}' trong logs: {e}")
+
+    # Kiem tra lai sau khi don dep
+    remaining_items = [it for it in os.listdir(logs_dir) if not it.startswith(".")]
+    for item in remaining_items:
+        item_path = os.path.join(logs_dir, item)
+        if (os.path.isdir(item_path) or os.path.islink(item_path)) and not is_valid_result_name(item):
+            log_fail(f"[{context_label}] Folder trong logs/ khong dung dinh dang YYYY.MM.DD_HH.MM.SS: '{item}'")
+
+def clean_all_logs_in_base_path(base_path):
+    """
+    Quet toan bo cay thu muc base_path de tim tat ca cac thu muc 'logs' va don dep lastest/
+    """
+    if not os.path.exists(base_path) or not os.path.isdir(base_path):
+        return
+    for root, dirs, _ in os.walk(base_path):
+        if "logs" in dirs:
+            logs_dir = os.path.join(root, "logs")
+            rel = os.path.relpath(logs_dir, base_path).replace("\\", "/")
+            check_and_clean_logs_folder(logs_dir, rel)
+
 def check_folder_zip_pairs(target_dir, context_label=""):
     if not os.path.exists(target_dir) or not os.path.isdir(target_dir):
         return
@@ -188,6 +239,9 @@ class GenerDict():
                             self.strc[str(fol)]["Multiple"]['folder'] = str(
                                 results_path + "/" + lastest)
                             self.strc[str(fol)]["Multiple"]['name'] = str(lastest)
+                    elif str(child) == "logs" and os.path.isdir(os.path.join(tempPath, child)):
+                        logs_path = os.path.join(tempPath, child)
+                        check_and_clean_logs_folder(logs_path, f"{fol}/logs")
                     elif str(child) == "single" and os.path.isdir(os.path.join(tempPath, child)):
                         temp1 = os.path.join(tempPath, child)
                         # For in siggle Module XTS folder
@@ -213,6 +267,9 @@ class GenerDict():
                                             self.strc[str(fol)][str(sg)]['folder'] = str(
                                                 single_results + "/" + lastTestFol)
                                             self.strc[str(fol)][str(sg)]['name'] = str(lastTestFol)
+                                    elif str(child2) == "logs" and os.path.isdir(os.path.join(temp2, child2)):
+                                        single_logs = os.path.join(temp2, child2)
+                                        check_and_clean_logs_folder(single_logs, f"{fol}/single/{sg}/logs")
                     # shutil.make_archive(base_name=path+"/01."+fol, format='zip', root_dir=path,base_dir=fol)
             elif os.path.isfile(tempPath) and str(tempPath).__contains__("Verifier"):
                 #make temp folder to unzip Verifier file
@@ -464,6 +521,9 @@ def restore_xts_folders(base_path):
             print(f"Restore {item} -> {original_name}")
         except Exception as e:
             log_fail("Restore rename folder error:", e)
+
+    # Don dep va kiem tra toan bo folder logs/ trong base_path
+    clean_all_logs_in_base_path(base_path)
                      
 def rename_and_zip_xts_folders(base_path):
     print("===============================================================================================")
