@@ -24,8 +24,8 @@ def is_valid_result_name(name):
 
 def clean_invalid_results_items(results_dir):
     """
-    Xoa cac folder/symlink khong hop le trong results/ (nhu 'lastest', 'latest'...).
-    Trong results/ chi cho phep ten folder co dinh dang YYYY.MM.DD_HH.MM.SS.
+    Remove invalid folders/symlinks in results/ (such as 'lastest', 'latest'...).
+    Only folder names matching YYYY.MM.DD_HH.MM.SS format are allowed in results/.
     """
     if not os.path.exists(results_dir) or not os.path.isdir(results_dir):
         return
@@ -34,7 +34,7 @@ def clean_invalid_results_items(results_dir):
         if item.startswith("."):
             continue
         item_path = os.path.join(results_dir, item)
-        # Neu la folder hoac symlink khong dung dinh dang YYYY.MM.DD_HH.MM.SS
+        # If it is a folder or symlink that does not match YYYY.MM.DD_HH.MM.SS format
         if os.path.isdir(item_path) or os.path.islink(item_path):
             if not is_valid_result_name(item):
                 try:
@@ -45,15 +45,15 @@ def clean_invalid_results_items(results_dir):
                         shutil.rmtree(item_path)
                         print(f"Removed invalid folder: {item_path}")
                 except Exception as e:
-                    log_fail(f"Loi khi xoa folder khong hop le '{item}' trong {results_dir}: {e}")
+                    log_fail(f"Error removing invalid folder '{item}' in {results_dir}: {e}")
 
 checked_logs_dirs = set()
 
 def check_and_clean_logs_folder(logs_dir, context_label=""):
     """
-    Kiem tra va don dep thu muc logs/:
-    - Xoa bo moi folder/symlink khong hop le (nhu 'lastest', 'latest'...).
-    - Dam bao trong logs/ chi co cac folder co dinh dang YYYY.MM.DD_HH.MM.SS.
+    Check and clean up logs/ directory:
+    - Remove any invalid folders/symlinks (such as 'lastest', 'latest'...).
+    - Ensure all remaining folders in logs/ match YYYY.MM.DD_HH.MM.SS format.
     """
     if not os.path.exists(logs_dir) or not os.path.isdir(logs_dir):
         return
@@ -77,18 +77,18 @@ def check_and_clean_logs_folder(logs_dir, context_label=""):
                         shutil.rmtree(item_path)
                         print(f"Removed invalid folder in logs: {item_path}")
                 except Exception as e:
-                    log_fail(f"[{context_label}] Loi khi xoa folder khong hop le '{item}' trong logs: {e}")
+                    log_fail(f"[{context_label}] Error removing invalid folder '{item}' in logs: {e}")
 
-    # Kiem tra lai sau khi don dep
+    # Verify remaining folders after cleanup
     remaining_items = [it for it in os.listdir(logs_dir) if not it.startswith(".")]
     for item in remaining_items:
         item_path = os.path.join(logs_dir, item)
         if (os.path.isdir(item_path) or os.path.islink(item_path)) and not is_valid_result_name(item):
-            log_fail(f"[{context_label}] Folder trong logs/ khong dung dinh dang YYYY.MM.DD_HH.MM.SS: '{item}'")
+            log_fail(f"[{context_label}] Folder in logs/ does not match format YYYY.MM.DD_HH.MM.SS: '{item}'")
 
 def clean_all_logs_in_base_path(base_path):
     """
-    Quet toan bo cay thu muc base_path de tim tat ca cac thu muc 'logs' va don dep lastest/
+    Scan entire directory tree in base_path to find all 'logs' folders and clean up invalid items (e.g. lastest).
     """
     if not os.path.exists(base_path) or not os.path.isdir(base_path):
         return
@@ -107,7 +107,7 @@ def check_folder_zip_pairs(target_dir, context_label=""):
         return
     checked_dirs.add(target_dir_norm)
 
-    # Neu la thu muc results/, lam sach cac folder khong hop le (nhu 'lastest') truoc
+    # If checking a results/ directory, clean up invalid items (such as 'lastest') first
     if "results" in context_label.lower():
         clean_invalid_results_items(target_dir)
 
@@ -125,19 +125,19 @@ def check_folder_zip_pairs(target_dir, context_label=""):
             zip_stems[stem] = item
 
     if not subfolders and not zip_stems:
-        log_fail(f"[{context_label}] Thu muc rong (khong co folder ket qua va file zip): {target_dir}")
+        log_fail(f"[{context_label}] Empty directory (no test result folders or zip files): {target_dir}")
         return
 
-    # Kiem tra folder thieu file zip tuong ung
+    # Check for folders missing matching zip file
     missing_zip = sorted(subfolders - set(zip_stems.keys()))
     for fol in missing_zip:
-        log_fail(f"[{context_label}] Folder '{fol}' thieu file zip tuong ung: '{fol}.zip'")
+        log_fail(f"[{context_label}] Folder '{fol}' is missing corresponding zip file: '{fol}.zip'")
 
-    # Kiem tra file zip thieu folder tuong ung
+    # Check for zip files missing matching folder
     missing_folder = sorted(set(zip_stems.keys()) - subfolders)
     for stem in missing_folder:
         actual_zip = zip_stems[stem]
-        log_fail(f"[{context_label}] File zip '{actual_zip}' thieu folder tuong ung: '{stem}'")
+        log_fail(f"[{context_label}] Zip file '{actual_zip}' is missing corresponding folder: '{stem}'")
 
 def run_command(command):
     process = subprocess.Popen(command, shell=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
@@ -388,7 +388,7 @@ def MakeInternal(path, struct):
            overview["model"] = data[model] + overview["DPI"] + "DPI"
         nameReport = "02.LGE_" + overview["model"] + "_" + i + "_Result_" + overview["sw_ver"]
         thu_muc = InternalStr[i]["path"]
-        ten_nen = InternalPATH + "/" + nameReport  # tên tập tin nén
+        ten_nen = InternalPATH + "/" + nameReport  # archive file name
         try:
             shutil.make_archive(ten_nen, 'zip', thu_muc)
         except Exception as e:
@@ -488,7 +488,7 @@ def MakeOemApfeUpload(path, struct):
     
 def restore_xts_folders(base_path):
 
-    # Xóa toàn bộ file zip dạng 01.xxx.zip
+    # Remove all 01.xxx.zip files
     for item in os.listdir(base_path):
 
         full_path = os.path.join(base_path, item)
@@ -500,7 +500,7 @@ def restore_xts_folders(base_path):
             except Exception as e:
                 log_fail("Restore remove zip error:", e)
     print("=== CLEAN DONE ===")	
-    # Đổi tên folder 01.xxx -> xxx
+    # Rename folder 01.xxx -> xxx
     for item in os.listdir(base_path):
 
         full_path = os.path.join(base_path, item)
@@ -522,19 +522,19 @@ def restore_xts_folders(base_path):
         except Exception as e:
             log_fail("Restore rename folder error:", e)
 
-    # Don dep va kiem tra toan bo folder logs/ trong base_path
+    # Clean and check all logs/ folders in base_path
     clean_all_logs_in_base_path(base_path)
                      
 def rename_and_zip_xts_folders(base_path):
     print("===============================================================================================")
     if failed_logs:
-        print("!!!!!!!!!!!!!!!!!!!!!!!! FAILED LOGS SUMMARY / DANH SACH LOG FAIL !!!!!!!!!!!!!!!!!!!!!!!!")
-        print(f"Tong so log fail phat hien: {len(failed_logs)}")
+        print("!!!!!!!!!!!!!!!!!!!!!!!! FAILED LOGS SUMMARY !!!!!!!!!!!!!!!!!!!!!!!!")
+        print(f"Total failed logs detected: {len(failed_logs)}")
         for idx, log in enumerate(failed_logs, 1):
             print(f"  [{idx}] {log}")
         print("===============================================================================================")
     else:
-        print("Khong phat hien log fail nao (No failed logs detected).")
+        print("No failed logs detected.")
         print("===============================================================================================")
 
     while True:
@@ -587,12 +587,12 @@ def cleanup_output(master_path):
             continue
 
         try:
-            # xóa folder
+            # Delete folder
             if os.path.isdir(full_path):
                 shutil.rmtree(full_path)
                 print("Deleted folder:", full_path)
 
-            # xóa file
+            # Delete file
             elif os.path.isfile(full_path):
                 os.remove(full_path)
                 print("Deleted file:", full_path)
