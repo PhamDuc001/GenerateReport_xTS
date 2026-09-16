@@ -11,13 +11,31 @@ from datetime import datetime
 import xml.etree.ElementTree as ET
 from turtle import *
 
+# Enable ANSI color escape sequences in Windows console
+if os.name == 'nt':
+    os.system('')
+
+COLOR_RED = "\033[91m"
+COLOR_RESET = "\033[0m"
+FAIL_TAG = f"{COLOR_RED}fail{COLOR_RESET}"
+
 failed_logs = []
 checked_dirs = set()
 
 def log_fail(*args, **kwargs):
-    msg = " ".join(str(arg) for arg in args)
-    print(*args, **kwargs)
-    failed_logs.append(msg)
+    msg = " ".join(str(arg) for arg in args).rstrip()
+    if not msg:
+        return
+    if msg.endswith(FAIL_TAG):
+        formatted_msg = msg
+    else:
+        m = re.search(r'(?i)\bfail$', msg)
+        if m:
+            formatted_msg = msg[:m.start()] + FAIL_TAG
+        else:
+            formatted_msg = f"{msg} {FAIL_TAG}"
+    print(formatted_msg, **kwargs)
+    failed_logs.append(formatted_msg)
 
 def is_valid_result_name(name):
     return bool(re.match(r"^\d{4}\.\d{2}\.\d{2}_\d{2}\.\d{2}\.\d{2}", name))
