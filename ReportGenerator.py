@@ -246,6 +246,7 @@ def CopyFolder(srcFolder, desFolder, name):
         log_fail("Source file " + srcFolder + " not found :", e)
 
 
+# Struct = []
 class GenerDict():
     def __init__(self):
         self.path = None
@@ -261,6 +262,7 @@ class GenerDict():
                     check_folder_zip_pairs(tempPath, "CTS_Verifier")
                     continue
                 self.strc[str(fol)] = {}
+                # For in XTS folder
                 for child in os.listdir(tempPath):
                     if str(child) == "results" and os.path.isdir(os.path.join(tempPath, child)):
                         results_path = os.path.join(tempPath, child)
@@ -285,11 +287,13 @@ class GenerDict():
                         check_and_clean_logs_folder(logs_path, f"{fol}/logs")
                     elif str(child) == "single" and os.path.isdir(os.path.join(tempPath, child)):
                         temp1 = os.path.join(tempPath, child)
+                        # For in siggle Module XTS folder
                         for sg in os.listdir(temp1):
                             temp2 = os.path.join(temp1, sg)
                             if not os.path.isfile(temp2):
                                 self.strc[str(fol)][str(sg)] = {}
                                 moduleNAme = sg
+                                # For in Result of single Module XTS folder
                                 for child2 in os.listdir(temp2):
                                     if str(child2) == "results" and os.path.isdir(os.path.join(temp2, child2)):
                                         single_results = os.path.join(temp2, child2)
@@ -311,7 +315,9 @@ class GenerDict():
                                     elif str(child2) == "logs" and os.path.isdir(os.path.join(temp2, child2)):
                                         single_logs = os.path.join(temp2, child2)
                                         check_and_clean_logs_folder(single_logs, f"{fol}/single/{sg}/logs")
+                    # shutil.make_archive(base_name=path+"/01."+fol, format='zip', root_dir=path,base_dir=fol)
             elif os.path.isfile(tempPath) and str(tempPath).__contains__("Verifier"):
+                #make temp folder to unzip Verifier file
                 MakeNewFolder(self.path, "Verifier")
                 template = str(os.path.join(self.path, "Verifier"))
                 unzip_file(tempPath, template)
@@ -411,8 +417,10 @@ def MakeInternal(path, struct):
                 if dict[i][j]["html"] != None and dict[i][j]["xml"] != None:
                     if j == "Multiple":
                         CopyAndRenameHtml(dict[i][j]["html"], InternalStr[i]["path"], "00." + i)
+                    #  CopyAndRenameXml(dict[i][j]["xml"], InternalStr[i]["data"], "00." + i)
                     else:
                         CopyAndRenameHtml(dict[i][j]["html"], InternalStr[i]["path"], j)
+                    # CopyAndRenameXml(dict[i][j]["xml"], InternalStr[i]["data"], j)
             except KeyError as e:
                 log_fail(f"KeyError in MakeInternal HTML ({i}/{j}):", e)
         print("Finish creating " + i + " folder")
@@ -425,7 +433,7 @@ def MakeInternal(path, struct):
            overview["model"] = data[model] + overview["DPI"] + "DPI"
         nameReport = "02.LGE_" + overview["model"] + "_" + i + "_Result_" + overview["sw_ver"]
         thu_muc = InternalStr[i]["path"]
-        ten_nen = InternalPATH + "/" + nameReport
+        ten_nen = InternalPATH + "/" + nameReport  # archive file name
         try:
             shutil.make_archive(ten_nen, 'zip', thu_muc)
         except Exception as e:
@@ -435,8 +443,10 @@ def MakeInternal(path, struct):
             try:
                 if dict[i][j]["html"] != None and dict[i][j]["xml"] != None:
                     if j == "Multiple":
+                        # CopyAndRenameHtml(dict[i][j]["html"], InternalStr[i]["path"], "00." + i)
                         CopyAndRenameXml(dict[i][j]["xml"], InternalStr[i]["data"], "00." + i)
                     else:
+                        # CopyAndRenameHtml(dict[i][j]["html"], InternalStr[i]["path"], j)
                         CopyAndRenameXml(dict[i][j]["xml"], InternalStr[i]["data"], j)
             except KeyError as e:
                 log_fail(f"KeyError in MakeInternal XML ({i}/{j}):", e)
@@ -529,6 +539,7 @@ def MakeOemApfeUpload(path, struct):
     
 def restore_xts_folders(base_path):
 
+    # Remove all 01.xxx.zip files
     for item in os.listdir(base_path):
 
         full_path = os.path.join(base_path, item)
@@ -540,6 +551,7 @@ def restore_xts_folders(base_path):
             except Exception as e:
                 log_fail("Restore remove zip error:", e)
     print("=== CLEAN DONE ===")	
+    # Rename folder 01.xxx -> xxx
     for item in os.listdir(base_path):
 
         full_path = os.path.join(base_path, item)
@@ -625,10 +637,12 @@ def cleanup_output(master_path):
             continue
 
         try:
+            # Delete folder
             if os.path.isdir(full_path):
                 shutil.rmtree(full_path)
                 print("Deleted folder:", full_path)
 
+            # Delete file
             elif os.path.isfile(full_path):
                 os.remove(full_path)
                 print("Deleted file:", full_path)
@@ -643,6 +657,7 @@ class thread(threading.Thread):
         self.thread_ID = thread_ID
         self.base_file = path_to_folder
         self.path_parent_folder = parent_folder
+        # helper function to execute the threads
 
     def run(self):
         try:
@@ -660,9 +675,12 @@ def replacePath(path):
 def MakeReportStruct(dict):
     path = agruments()
     MasterFol = str(path)[:len(path) - 8]
+    # for i in range(4):
+    #     dict[i]={}
     dict[0] = str(os.path.join(MasterFol, "00.Internal"))
     dict[1] = str(os.path.join(MasterFol, "00.OEM_APFE"))
     dict[2] = str(os.path.join(MasterFol, "00.OEM_APFE_UPLOAD"))
+    # dict[3] = str(os.path.join(MasterFol, "00.Report"))
     print(1)
     for i in dict.values():
         try:
@@ -738,4 +756,5 @@ o8o        `8  `Y888""8o o888bood8P'  `Y8bod8P'
         print("CTS Verifier folder not exist")
     MakeInternal(StructReport[0], StructResult)
     rename_and_zip_xts_folders(agruments())
+# # Version 1.5_18062026
 
